@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.venv*/
+venv/
+.env
+!.env.example
+.env.*
+outputs/*.png
+outputs_ui_latest/
+reviews_semantic_*.csv
+debug.log
+.Rhistory
+.streamlit/secrets.toml
