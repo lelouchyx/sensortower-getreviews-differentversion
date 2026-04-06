@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from requests.exceptions import ConnectTimeout, ConnectionError as RequestsConnectionError, HTTPError
+from requests.exceptions import ConnectTimeout, ConnectionError as RequestsConnectionError, HTTPError, ReadTimeout
 
 from .config import Settings
 from .models import Review, SearchRequest
@@ -90,6 +90,7 @@ class SSTClient:
 
             response = None
             last_timeout_error: ConnectTimeout | None = None
+            last_read_timeout_error: ReadTimeout | None = None
             last_connection_error: RequestsConnectionError | None = None
             unauthorized_hosts: list[str] = []
             unauthorized_details: list[str] = []
@@ -127,6 +128,10 @@ class SSTClient:
                     break
                 except ConnectTimeout as exc:
                     last_timeout_error = exc
+                    continue
+                except ReadTimeout as exc:
+                    # 读取超时：尝试切换备用域名继续请求，避免单一域名链路抖动导致整体失败。
+                    last_read_timeout_error = exc
                     continue
                 except RequestsConnectionError as exc:
                     last_connection_error = exc
@@ -169,6 +174,12 @@ class SSTClient:
                         f"连接 {api_host} 超时。请检查当前网络/代理设置，"
                         "或增大 SST_TIMEOUT_SECONDS 后重试。"
                     ) from last_timeout_error
+                if last_read_timeout_error is not None:
+                    api_host = urlparse(active_base_url).hostname or active_base_url
+                    raise RuntimeError(
+                        f"读取 {api_host} 响应超时。请检查当前网络质量，"
+                        "可尝试增大 API 超时秒数或切换网络后重试。"
+                    ) from last_read_timeout_error
                 if last_connection_error is not None:
                     raise RuntimeError(
                         "无法连接 SensorTower API。请检查网络连通性、DNS、代理或防火墙策略。"
